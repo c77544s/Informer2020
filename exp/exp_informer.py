@@ -194,7 +194,7 @@ class Exp_Informer(Exp_Basic):
                     # plt.plot(true[i, :, 0], label='true')
                     # plt.plot(np.array(range(0, real_prediction.shape[1])), np.array(real_prediction[0][:,0]), label='real_prediction')
                     # plt.plot(pred[i, :, 0], label='pred')
-
+                    plt.legend()
                     plt.show()
 
                 if (i+1) % 100==0:

@@ -163,7 +163,7 @@ if __name__ == '__main__':
             # plt.plot(true[i, :, 0], label='true')
             # plt.plot(np.array(range(0, real_prediction.shape[1])), np.array(real_prediction[0][:,0]), label='real_prediction')
             # plt.plot(pred[i, :, 0], label='pred')
-
+            plt.legend()
             plt.show()
 
         # 保存模型
