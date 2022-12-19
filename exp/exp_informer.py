@@ -1,4 +1,4 @@
-from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred
+from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred, Dataset_Pred_True
 from exp.exp_basic import Exp_Basic
 from models.model import Informer, InformerStack
 
@@ -11,6 +11,8 @@ import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader
+
+import matplotlib.pyplot as plt
 
 import os
 import time
@@ -109,6 +111,12 @@ class Exp_Informer(Exp_Basic):
     
     def _select_criterion(self):
         criterion =  nn.MSELoss()
+        if self.args.loss == 'mse':
+            criterion = nn.MSELoss()
+        if self.args.loss == 'L1loss':
+            criterion = nn.L1Loss()
+        if self.args.loss == 'huberloss':
+            criterion = nn.SmoothL1Loss()
         return criterion
 
     def vali(self, vali_data, vali_loader, criterion):
@@ -149,6 +157,9 @@ class Exp_Informer(Exp_Basic):
             
             self.model.train()
             epoch_time = time.time()
+
+            draw_chart = True;
+
             for i, (batch_x,batch_y,batch_x_mark,batch_y_mark) in enumerate(train_loader):
                 iter_count += 1
                 
@@ -157,7 +168,35 @@ class Exp_Informer(Exp_Basic):
                     train_data, batch_x, batch_y, batch_x_mark, batch_y_mark)
                 loss = criterion(pred, true)
                 train_loss.append(loss.item())
-                
+
+                if draw_chart:
+                    draw_chart = False
+                    pred_test = train_data.inverse_transform(pred)
+                    true_true = train_data.inverse_transform(true)
+
+                    pred_test = np.array(pred_test.detach().cpu().numpy())
+                    pred_test = pred_test.reshape(-1, pred_test.shape[-2], pred_test.shape[-1])
+                    pred_test = pred_test[0,:,0]
+
+                    true_true = np.array(true_true.detach().cpu().numpy())
+                    true_true = true_true.reshape(-1, true_true.shape[-2], true_true.shape[-1])
+                    true_true = true_true[0,:,0]
+
+                    plt.rcParams["figure.figsize"] = (15, 5)  # 调整生成的图表最大尺寸
+                    plt.title('cpm Load')
+                    plt.ylabel('recordValue')
+                    plt.xlabel('time')
+                    plt.grid(True)  # 显示网格线
+                    plt.autoscale(axis='x', tight=True)  # 调整x轴的范围
+                    plt.plot(range(len(pred_test)), pred_test, label='predict')
+                    plt.plot(range(len(pred_test)), true_true, label='true')
+                    # for i in range(real_prediction.shape[1]):
+                    # plt.plot(true[i, :, 0], label='true')
+                    # plt.plot(np.array(range(0, real_prediction.shape[1])), np.array(real_prediction[0][:,0]), label='real_prediction')
+                    # plt.plot(pred[i, :, 0], label='pred')
+
+                    plt.show()
+
                 if (i+1) % 100==0:
                     print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time()-time_now)/iter_count
@@ -255,7 +294,63 @@ class Exp_Informer(Exp_Basic):
         
         np.save(folder_path+'real_prediction.npy', preds)
         
-        return
+        return preds
+
+    def predict_true(self, pred_data, setting, load=False):
+        pred_data, pred_loader = self.parse_predict_data(pred_data)
+
+        if load:
+            path = os.path.join(self.args.checkpoints, setting)
+            best_model_path = path + '/' + 'checkpoint.pth'
+            self.model.load_state_dict(torch.load(best_model_path))
+            # self.model.load_state_dict(torch.load("model.pt"))
+        self.model.eval()
+
+        predicts = []
+        trues = []
+
+
+        # self.args.inverse = True
+        for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(pred_loader):
+            pred, true = self._process_one_batch(
+                pred_data, batch_x, batch_y, batch_x_mark, batch_y_mark)
+            predicts.append(pred.detach().cpu().numpy())
+            trues.append(pred_data.inverse_transform(pred).detach().cpu().numpy())
+
+        predicts = np.array(predicts)
+        predicts = predicts.reshape(-1, predicts.shape[-2], predicts.shape[-1])
+        trues = np.array(trues)
+        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
+        print('predict:', predicts)
+        print('true:', trues)
+        return trues
+
+    def parse_predict_data(self, pred_data):
+        args = self.args
+        timeenc = 0 if args.embed!='timeF' else 1
+
+        shuffle_flag = False; drop_last = False; batch_size = 1; freq=args.detail_freq
+
+        data_set = Dataset_Pred_True(
+            size=[args.seq_len, args.label_len, args.pred_len],
+            features=args.features,
+            target=args.target,
+            inverse=args.inverse,
+            timeenc=timeenc,
+            freq=freq,
+            cols=args.cols,
+            pred_data=pred_data
+        )
+        print('predict', len(data_set))
+        data_loader = DataLoader(
+            data_set,
+            batch_size=batch_size,
+            shuffle=shuffle_flag,
+            num_workers=args.num_workers,
+            drop_last=drop_last)
+
+        return data_set, data_loader
+
 
     def _process_one_batch(self, dataset_object, batch_x, batch_y, batch_x_mark, batch_y_mark):
         batch_x = batch_x.float().to(self.device)
