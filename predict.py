@@ -29,8 +29,8 @@ exp = Exp_Informer(args)
 # pred_data = pd.read_csv("data/CPM/cpm.csv")
 cpm_data = pd.read_csv("data/CPM/cpm.csv")
 # 获取随机数范围在0-1000之间的1个数
-random_num = np.random.randint(0, 1000)
-start = random_num * 3
+random_num = np.random.randint(0, 400)
+start = random_num * 1
 end = start + args.seq_len
 pred_data = cpm_data[start:end]
 true_data = cpm_data[end:end + args.pred_len]
