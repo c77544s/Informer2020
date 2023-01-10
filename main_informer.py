@@ -119,3 +119,6 @@ if __name__ == '__main__':
             exp.predict(setting, True)
 
         torch.cuda.empty_cache()
+
+        # 保存模型
+        torch.save(exp.model.state_dict(), 'model.pt')
